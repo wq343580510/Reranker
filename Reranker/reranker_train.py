@@ -10,12 +10,12 @@ DEV = 'dev'
 TEST = 'test'
 OUTPUT_MODEL = 'model.pkl'
 OUTPUT_DICT = 'dict.pkl'
-TRAIN_BATCH_SIZE = 4
+TRAIN_BATCH_SIZE = 3
 FINE_GRAINED = False
 DEPENDENCY = False
 SEED = 88
 
-NUM_EPOCHS = 20
+NUM_EPOCHS = 10
 
 
 def train_dataset(model, data, echo ,batch):
