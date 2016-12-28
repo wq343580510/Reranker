@@ -10,7 +10,8 @@ DEV = 'dev'
 TEST = 'test'
 
 class instance(object):
-    def __init__(self,kbest,scores,gold,lines = None,gold_lines = None):
+    def __init__(self,kbest,scores,gold,lines = None,gold_lines = None,id = None):
+        self.id = id
         self.kbest = kbest
         self.scores = scores
         self.gold = gold
@@ -19,6 +20,7 @@ class instance(object):
 
 
 class data_manager(object):
+    max_degree = 0
     def __init__(self,batch,train_kbest = None,train_gold = None,dev_kbest = None,dev_gold = None,
                  test_kbest = None,test_gold = None):
         self.vocab = None
@@ -29,7 +31,6 @@ class data_manager(object):
         self.batch = batch
         self.test_kbest = test_kbest
         self.test_gold = test_gold
-        self.max_degree = 0
         if os.path.exists(os.path.join(DIR,OUTPUT_DICT)):
             print 'load vocab'
             self.max_degree,self.vocab = data_util.load_dict(os.path.join(DIR, OUTPUT_DICT))
@@ -79,12 +80,3 @@ class data_manager(object):
 
 
 
-
-if __name__ == '__main__':
-    #s = train_iterator(os.path.join(DIR,TRAIN+'.kbest'),os.path.join(DIR,TRAIN+'.gold'))
-    s = data_util(2,os.path.join(DIR,TRAIN+'.kbest'),os.path.join(DIR,TRAIN+'.gold'),
-                  os.path.join(DIR, DEV + '.kbest'), os.path.join(DIR, DEV + '.gold'))
-    data = s.train_iter.read_batch()
-    while not data is None:
-        print 'read a batch:' + str(len(data))
-        data = s.train_iter.read_batch()

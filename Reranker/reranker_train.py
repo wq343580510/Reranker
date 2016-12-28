@@ -10,12 +10,12 @@ DEV = 'dev'
 TEST = 'test'
 OUTPUT_MODEL = 'model.pkl'
 OUTPUT_DICT = 'dict.pkl'
-TRAIN_BATCH_SIZE = 3
+TRAIN_BATCH_SIZE = 9
 FINE_GRAINED = False
 DEPENDENCY = False
 SEED = 88
 
-NUM_EPOCHS = 10
+NUM_EPOCHS = 100
 
 
 def train_dataset(model, data, echo ,batch):
@@ -23,10 +23,10 @@ def train_dataset(model, data, echo ,batch):
     avg_loss = 0.0
     total_data = len(data)
     for i, inst in enumerate(data):
-        loss = model.train_step(inst.kbest,inst.gold)  # labels will be determined by model
+        loss = model.train_step_withbase(inst.kbest,inst.gold,inst.scores)  # labels will be determined by model
         losses.append(loss)
         avg_loss = avg_loss * (len(losses) - 1) / len(losses) + loss / len(losses)
-        print 'echo %d batch %d avg loss %.4f at example %d of %d\r' % (echo ,batch , avg_loss, i, total_data)
+        #print 'echo %d batch %d avg loss %.4f example id %d batch size %d\r' % (echo ,batch,avg_loss, inst.id, total_data)
     return np.mean(losses)
 
 
@@ -37,18 +37,18 @@ def train_model():
                          os.path.join(DIR, DEV + '.gold'))
     train_iter = data_tool.train_iter
     dev_data = data_tool.dev_data
-    vocab = data_tool.vocab
     print 'build model'
     model = dependency_model.get_model(data_tool.vocab.size(), data_tool.max_degree)
     print 'model established'
     max_uas = 0
     for i in range(NUM_EPOCHS):
-        data = train_iter.read_batch();
+        data = train_iter.read_batch()
         j = 0
         while not data is None:
-            print 'train on one batch: %d' % len(data)
-            train_dataset(model, data, i, j)
+            print 'Echo %d train on one batch %d: %d' % (i, j, len(data))
+            train_dataset(model, data ,i,j)
             data = train_iter.read_batch()
+            j += 1
             uas = parser_test.evaluate_dataset(model, dev_data , True)[0]
             if uas > max_uas:
                 max_uas = uas

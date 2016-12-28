@@ -251,7 +251,12 @@ class TreeRNN(object):
         self._predict = theano.function([self.x, self.tree],
                                         self.pred_y)
 
+
     def _check_input(self, x, tree):
+        if not np.array_equal(tree[:, -1], np.arange(len(x) - len(tree), len(x))):
+            print len(x)
+            print len(tree)
+            print tree[:, -1]
         assert np.array_equal(tree[:, -1], np.arange(len(x) - len(tree), len(x)))
         # tree record the order of the tree such as that if [1,3,4] is the child if 5
         # there is a row of [1,3,4,5]
@@ -285,11 +290,14 @@ class TreeRNN(object):
         self._check_input(x, tree)
         return self._evaluate(x, tree[:, :-1])
 
+
     def predict(self, root_node):
         x, tree = gen_nn_inputs(root_node, max_degree=self.degree, only_leaves_have_vals=False)
         # x list the val of leaves and internal nodes
         self._check_input(x, tree)
         return self._predict(x, tree[:, :-1])
+
+
     def init_matrix(self, shape):
         return np.random.normal(scale=0.1, size=shape).astype(theano.config.floatX)
 

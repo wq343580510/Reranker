@@ -1,10 +1,10 @@
 import os
-
+import dev_reader
 import data_util
 import dependency_model
 from eval import eval as eval_tool
 
-DIR = 'd:\\MacShare\\data2\\'
+DIR = 'd:\\MacShare\\data\\'
 TRAIN = 'train'
 DEV = 'dev'
 TEST = 'test'
@@ -13,16 +13,21 @@ OUTPUT_DICT = 'dict.pkl'
 
 
 def test_model():
-    vocab = data_util.load_model(os.path.join(DIR,OUTPUT_DICT))
-    data, max_degree, _ = data_util.get_data(os.path.join(DIR,TEST+'.kbest'),os.path.join(DIR,TEST+'.gold'),vocab)
+    max_degree,vocab = data_util.load_dict(os.path.join(DIR,OUTPUT_DICT))
+    dev_data = dev_reader.read_dev(os.path.join(DIR, DEV + '.kbest'),
+                                        os.path.join(DIR, DEV + '.gold'), vocab)
+    test_data = dev_reader.read_dev(os.path.join(DIR, TEST + '.kbest'),
+                                        os.path.join(DIR, TEST + '.gold'), vocab)
     print 'build model'
     model = dependency_model.get_model(vocab.size(), max_degree)
     print 'load params'
     model.set_parmas(os.path.join(DIR,OUTPUT_MODEL))
     print 'addbase'
-    evaluate_dataset(model,data,True)
+    evaluate_dataset(model,dev_data,True)
+    evaluate_dataset(model, test_data, True)
     print 'withoutbase'
     evaluate_dataset(model,data,False)
+    evaluate_dataset(model, test_data, False)
 
 
 def evaluate_baseline(data):
@@ -85,7 +90,7 @@ def evaluate_dataset(model, data , addbase):
     pred_trees = []
     gold_trees = []
     for i, inst in enumerate(data):
-        pred_scores = [model.predict(tree) for tree in inst.kbest]
+        pred_scores = [model.predict(tree) for tree in inst.kbest if tree.size == inst.gold.size]
         data_util.normalize(pred_scores)
         if addbase:
             data_util.normalize(inst.scores)
@@ -104,5 +109,4 @@ def evaluate_dataset(model, data , addbase):
     return res
 if __name__ == '__main__':
     test_model()
-    test_data , _ , _ = data_util.get_data(os.path.join(DIR,TEST+'.kbest'),os.path.join(DIR,TEST+'.gold'))
-    evaluate_oracle_worst(test_data)
+    #evaluate_oracle_worst(test_data)
