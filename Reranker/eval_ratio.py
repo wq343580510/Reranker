@@ -1,35 +1,33 @@
 import os
 import dev_reader
 import data_util
+import dependency_model
 from eval import eval as eval_tool
 
-DIR = 'd:\\MacShare\\data2\\'
+DIR = 'd:\\MacShare\\data\\'
 TRAIN = 'train'
 DEV = 'dev'
 TEST = 'test'
-OUTPUT_MODEL = 'model_8.pkl'
-OUTPUT_DICT = 'dict_8.pkl'
+OUTPUT_MODEL = 'model.pkl'
+OUTPUT_DICT = 'dict.pkl'
 
 
 def test_model():
     max_degree,vocab = data_util.load_dict(os.path.join(DIR,OUTPUT_DICT))
     dev_data = dev_reader.read_dev(os.path.join(DIR, DEV + '.kbest'),
                                         os.path.join(DIR, DEV + '.gold'), vocab)
-    # test_data = dev_reader.read_dev(os.path.join(DIR, TEST + '.kbest'),
-    #                                     os.path.join(DIR, TEST + '.gold'), vocab)
-    #evaluate_oracle_worst(test_data)
-    evaluate_oracle_worst(dev_data)
+    test_data = dev_reader.read_dev(os.path.join(DIR, TEST + '.kbest'),
+                                        os.path.join(DIR, TEST + '.gold'), vocab)
     print 'build model'
     model = dependency_model.get_model(vocab.size(), max_degree)
     print 'load params'
     model.set_parmas(os.path.join(DIR,OUTPUT_MODEL))
     print 'addbase'
-    evaluate_dataset(model,dev_data,True)
-    #evaluate_dataset(model, test_data, True)
-    print 'withoutbase'
-    evaluate_dataset(model,dev_data,False)
-    #evaluate_dataset(model, test_data, False)
-
+    max = 0
+    for i in range(200):
+        res = evaluate_dataset(model,dev_data,True,ratio=0.005*i)
+        if res[0]>max:
+            max = res[0]
 
 def evaluate_baseline(data):
     pred_trees = []
@@ -87,7 +85,7 @@ def evaluate_oracle_worst(data):
     print 'worst: %.4f'  % (eval_tool.evaluate(worst_trees, gold_trees)[0])
 
 
-def evaluate_dataset(model, data , addbase):
+def evaluate_dataset(model, data , addbase ,ratio = 1):
     pred_trees = []
     gold_trees = []
     for i, inst in enumerate(data):
@@ -95,10 +93,11 @@ def evaluate_dataset(model, data , addbase):
         data_util.normalize(pred_scores)
         if addbase:
             data_util.normalize(inst.scores)
-            scores = [p_s + b_s for p_s, b_s in zip(pred_scores, inst.scores)]
+            scores = [ratio*p_s + (1-ratio)*b_s for p_s, b_s in zip(pred_scores, inst.scores)]
         else:
             scores = pred_scores
         max_id = scores.index(max(scores))
+        #print "pred: %.4f    base: %.4f" % (pred_scores[max_id],inst.scores[max_id])
         for line in inst.lines[max_id]:
             pred_trees.append(line)
         pred_trees.append('\n')

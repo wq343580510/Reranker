@@ -22,19 +22,21 @@ def train_dataset(model, data, echo ,batch):
     losses = []
     avg_loss = 0.0
     total_data = len(data)
+    loss = 0
     for i, inst in enumerate(data):
-        loss = model.train_step_withbase(inst.kbest,inst.gold,inst.scores)  # labels will be determined by model
+        loss = model.train_step(inst.kbest,inst.gold)  # labels will be determined by model
         losses.append(loss)
-        avg_loss = avg_loss * (len(losses) - 1) / len(losses) + loss / len(losses)
+        #avg_loss = avg_loss * (len(losses) - 1) / len(losses) + loss / len(losses)
         #print 'echo %d batch %d avg loss %.4f example id %d batch size %d\r' % (echo ,batch,avg_loss, inst.id, total_data)
-    return np.mean(losses)
-
+    loss = np.mean(losses)
+    print 'loss %.4f' % loss
+    return loss
 
 def train_model():
     data_tool = data_reader.data_manager(TRAIN_BATCH_SIZE,os.path.join(DIR,TRAIN+'.kbest'),
                          os.path.join(DIR,TRAIN+'.gold'),
                          os.path.join(DIR, DEV + '.kbest'),
-                         os.path.join(DIR, DEV + '.gold'))
+                         os.path.join(DIR, DEV + '.gold'),vocab_path= os.path.join(DIR, OUTPUT_DICT))
     train_iter = data_tool.train_iter
     dev_data = data_tool.dev_data
     print 'build model'

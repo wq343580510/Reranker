@@ -220,7 +220,7 @@ class TreeRNN(object):
             self.loss = self.loss_fn_multi(self.y, self.pred_y, self.y_exists)
         else:
             self.output_fn = self.create_output_fn()
-            self.pred_y = self.output_fn(self.final_state)
+            self.pred_y = self.output_fn(self.tree_states,self.tree)
             self.loss = self.loss_fn(self.y, self.pred_y)
 
         self.x_gold = T.ivector(name='x_gold')  # word indices
@@ -229,7 +229,7 @@ class TreeRNN(object):
         emb_x_gold = emb_x_gold * T.neq(self.x_gold, -1).dimshuffle(0, 'x')  # zero-out non-existent embeddings
         self.tree_states_gold = self.compute_tree(emb_x_gold, self.tree_gold)
         self.final_state_gold = self.tree_states_gold[-1]
-        self.gold_y = self.output_fn(self.final_state_gold)
+        self.gold_y = self.output_fn(self.tree_states_gold,self.tree_gold)
         self.loss_margin = self.loss_fn(self.gold_y, self.pred_y)
         updates_margin = self.gradient_descent(self.loss_margin)
         train_inputs_margin  = [self.x, self.tree ,self.x_gold,self.tree_gold]
@@ -358,6 +358,10 @@ class TreeRNN(object):
         # use recurrence to compute internal node hidden states
         # sequences outputs_info non_sequences
         # emb_x[num_leaves:]  tree T.arange(num_nodes)
+        # sequences, outputs_info, non_sequences
+        # cur_emb is one of emb_x[num_leaves:] the internal node emb
+        # node_info is one of tree, t is 0 to nums_nodes(internal number)
+        # node_h = leaf emb and parent emb
         def _recurrence(cur_emb, node_info, t, node_h, last_h):
             child_exists = node_info > -1
             offset = num_leaves * int(self.irregular_tree) - child_exists * t

@@ -1,6 +1,6 @@
 import pickle
 import math
-
+from eval import eval as eval_tool
 
 
 class instance(object):
@@ -10,7 +10,23 @@ class instance(object):
         self.gold = gold
         self.gold_lines = gold_lines
         self.lines = lines
+        self.maxid = self.get_oracle_index()
 
+    def get_oracle_index(self):
+        max = 0
+        maxid = 0
+        i = 0
+        for list in self.lines:
+            temp = []
+            for line in list:
+                temp.append(line)
+            temp.append('\n')
+            res = eval_tool.evaluate(temp, self.gold_lines)[0]
+            if res > max:
+                max = res
+                maxid = i
+            i += 1
+        return maxid
 
 def normalize(list):
     sum = 0

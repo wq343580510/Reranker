@@ -3,11 +3,6 @@ import os
 import Vocab
 import data_util
 import dev_reader
-DIR = 'd:\\MacShare\\data\\'
-OUTPUT_DICT = 'dict.pkl'
-TRAIN = 'train'
-DEV = 'dev'
-TEST = 'test'
 
 class instance(object):
     def __init__(self,kbest,scores,gold,lines = None,gold_lines = None,id = None):
@@ -22,7 +17,7 @@ class instance(object):
 class data_manager(object):
     max_degree = 0
     def __init__(self,batch,train_kbest = None,train_gold = None,dev_kbest = None,dev_gold = None,
-                 test_kbest = None,test_gold = None):
+                 test_kbest = None,test_gold = None,vocab_path = None):
         self.vocab = None
         self.train_kbest = train_kbest
         self.train_gold = train_gold
@@ -31,16 +26,16 @@ class data_manager(object):
         self.batch = batch
         self.test_kbest = test_kbest
         self.test_gold = test_gold
-        if os.path.exists(os.path.join(DIR,OUTPUT_DICT)):
+        if os.path.exists(vocab_path):
             print 'load vocab'
-            self.max_degree,self.vocab = data_util.load_dict(os.path.join(DIR, OUTPUT_DICT))
+            self.max_degree,self.vocab = data_util.load_dict(vocab_path)
         else:
             print 'creat vocab'
             self.vocab = Vocab.Vocab(self.train_gold)
             print 'get max_degree'
             self.max_degree = self.get_max_degree()
             print 'save dictionary'
-            data_util.save_dict(self.vocab,self.max_degree, os.path.join(DIR, OUTPUT_DICT))
+            data_util.save_dict(self.vocab,self.max_degree, vocab_path)
         print 'vocab size:' + str(self.vocab.size())
         print 'max_degree' + str(self.max_degree)
         print 'get dev'

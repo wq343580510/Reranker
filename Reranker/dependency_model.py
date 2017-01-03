@@ -40,12 +40,35 @@ class DependencyModel(tree_lstm.ChildSumTreeLSTM):
 
 
     def create_output_fn(self):
-        self.W_out = theano.shared(self.init_matrix([self.hidden_dim]))
-        self.b_out = theano.shared(self.init_matrix([1]))
+        self.W_out = theano.shared(self.init_matrix([2*self.hidden_dim]))
+        self.b_out = theano.shared(self.init_vector([1]))
         self.params.extend([self.W_out, self.b_out])
 
-        def fn(final_state):
-            return T.dot(self.W_out, final_state) + self.b_out
+        def compute_one_edge(one_child, tree_states , parent):
+            score = T.switch(T.lt(-1,one_child),
+                             T.dot(self.W_out, T.concatenate([tree_states[one_child], parent]))+ self.b_out,
+                             T.zeros(1))
+            return score
+
+        def compute_one_tree(one_tree, tree_states):
+            children = one_tree[0:-1]
+            parent = tree_states[one_tree[-1]]
+            result,_ = theano.scan(
+                fn=compute_one_edge,
+                outputs_info=None,
+                sequences=[children],
+                non_sequences=[tree_states,parent],
+            )
+            return T.sum(result)
+
+        def fn(tree_states, tree):
+            scores ,_ = theano.scan(
+                fn=compute_one_tree,
+                outputs_info=None,
+                sequences=[tree],
+                non_sequences=[tree_states],
+            )
+            return T.sum(scores)
         return fn
 
     def train_step(self, kbest_tree, gold_root):
@@ -57,7 +80,7 @@ class DependencyModel(tree_lstm.ChildSumTreeLSTM):
         gold_score = self.predict(gold_root)
         pred_score = scores[max_id]
         loss = gold_score - pred_score
-        if loss < 0:
+        if True or loss < 0:
             self.train_margin(gold_root, pred_root)
         return loss
 
@@ -70,7 +93,7 @@ class DependencyModel(tree_lstm.ChildSumTreeLSTM):
                 pred_scores.append(self.predict(tree))
                 scores.append(base_scores[i])
             i += 1
-        old_scores = pred_scores[:]
+        #old_scores = pred_scores[:]
         data_util.normalize(pred_scores)
         scores = [p_s + b_s for p_s,b_s in zip(pred_scores,base_scores)]
         max_id = scores.index(max(scores))
@@ -78,7 +101,7 @@ class DependencyModel(tree_lstm.ChildSumTreeLSTM):
         if pred_root.size != gold_root.size:
             return 0
         gold_score = self.predict(gold_root)
-        pred_score = old_scores[max_id]
+        pred_score = pred_scores[max_id]
         loss = gold_score-pred_score
         if loss < 0:
             self.train_margin(gold_root,pred_root)
