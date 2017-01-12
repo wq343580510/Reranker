@@ -10,7 +10,6 @@ class instance(object):
         self.gold = gold
         self.gold_lines = gold_lines
         self.lines = lines
-        self.maxid = self.get_oracle_index()
 
     def get_oracle_index(self):
         max = 0
@@ -40,10 +39,9 @@ def normalize(list):
 
 
 
-def save_model(model,output_file):
+def save_model(params,output_file):
     output = open(output_file, 'wb')
-    for shared_value in model.params:
-        pickle.dump(shared_value.get_value(),output, protocol=2)
+    pickle.dump(params,output, protocol=2)
     output.close()
 
 

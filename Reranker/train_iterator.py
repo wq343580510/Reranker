@@ -129,12 +129,13 @@ def read_tree(list,vocab):
     root = None
     for i in range(len(list)):
         att_list.append(list[i].split())
+        pos_tag = att_list[i][3]
         word = att_list[i][1]
         if vocab is None:
             val = word
         else:
             val = vocab.index(word)
-        nodes.append(tree_rnn.Node(val))
+        nodes.append(tree_rnn.Node(val,label=vocab.index_pos(pos_tag)))
     for i in range(len(list)):
         parent = int(att_list[i][6]) - 1
         if parent >= 0:

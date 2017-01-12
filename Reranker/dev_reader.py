@@ -1,7 +1,7 @@
 import data_reader
 import train_iterator
 
-
+dev_size = 200
 def read_dev(kbest_filename, gold_filename, vocab):
     with open(kbest_filename, 'r') as reader:
         kbest_data = reader.readlines()
@@ -54,5 +54,7 @@ def read_dev(kbest_filename, gold_filename, vocab):
     for a,b,c,d,e in zip(kbest, scores, gold, lines, gold_lines):
         if len(c.children) == 0:
             continue
+        if len(dev_data) == dev_size:
+            break
         dev_data.append(data_reader.instance(a,b,c,d,e))
     return dev_data

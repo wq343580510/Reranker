@@ -1,14 +1,15 @@
 import os
 import dev_reader
 import data_util
+import dependency_model
 from eval import eval as eval_tool
 
-DIR = 'd:\\MacShare\\data2\\'
+DIR = 'd:\\MacShare\\data\\'
 TRAIN = 'train'
 DEV = 'dev'
 TEST = 'test'
-OUTPUT_MODEL = 'model_8.pkl'
-OUTPUT_DICT = 'dict_8.pkl'
+OUTPUT_MODEL = 'model.pkl'
+OUTPUT_DICT = 'dict.pkl'
 
 
 def test_model():
@@ -18,11 +19,12 @@ def test_model():
     # test_data = dev_reader.read_dev(os.path.join(DIR, TEST + '.kbest'),
     #                                     os.path.join(DIR, TEST + '.gold'), vocab)
     #evaluate_oracle_worst(test_data)
+    print 'load params'
+    params = data_util.load_model(os.path.join(DIR,OUTPUT_MODEL))
     evaluate_oracle_worst(dev_data)
     print 'build model'
-    model = dependency_model.get_model(vocab.size(), max_degree)
-    print 'load params'
-    model.set_parmas(os.path.join(DIR,OUTPUT_MODEL))
+    model = dependency_model.get_model(vocab.size(),vocab.size_pos(), max_degree)
+    model.set_params(params)
     print 'addbase'
     evaluate_dataset(model,dev_data,True)
     #evaluate_dataset(model, test_data, True)

@@ -15,7 +15,6 @@ class instance(object):
 
 
 class data_manager(object):
-    max_degree = 0
     def __init__(self,batch,train_kbest = None,train_gold = None,dev_kbest = None,dev_gold = None,
                  test_kbest = None,test_gold = None,vocab_path = None):
         self.vocab = None
@@ -26,7 +25,7 @@ class data_manager(object):
         self.batch = batch
         self.test_kbest = test_kbest
         self.test_gold = test_gold
-        if os.path.exists(vocab_path):
+        if False and os.path.exists(vocab_path):
             print 'load vocab'
             self.max_degree,self.vocab = data_util.load_dict(vocab_path)
         else:
@@ -37,6 +36,7 @@ class data_manager(object):
             print 'save dictionary'
             data_util.save_dict(self.vocab,self.max_degree, vocab_path)
         print 'vocab size:' + str(self.vocab.size())
+        print 'postag size:' + str(self.vocab.size_pos())
         print 'max_degree' + str(self.max_degree)
         print 'get dev'
         self.dev_data = dev_reader.read_dev(dev_kbest,dev_gold,self.vocab)

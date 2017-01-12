@@ -6,7 +6,7 @@ import numpy as np
 import data_reader
 import tree_rnn
 DIR = 'd:\\MacShare\\data\\'
-DIR2 = '/home/wangq/parser/data2/'
+DIR2 = '/home/wangq/parser/data/'
 TRAIN = 'train'
 DEV = 'dev'
 TEST = 'test'
@@ -27,7 +27,7 @@ def check_input(x, tree):
 
 
 def check_tree(root_node):
-    x, tree = tree_rnn.gen_nn_inputs(root_node, max_degree=12, only_leaves_have_vals=False)
+    x, tree = tree_rnn.gen_nn_inputs(root_node, max_degree=12, only_leaves_have_vals=False,with_labels=False)
     # x list the val of leaves and internal nodes
     child_exists = tree[0] > -1
     offset = 5 * 1 - child_exists * 1

@@ -85,8 +85,10 @@ def read_tree(list,vocab):
     for i in range(len(list)):
         att_list.append(list[i].split())
         word = att_list[i][1]
+        #add label
+        label = att_list[i][3]
         val = vocab.index(word)
-        nodes.append(tree_rnn.Node(val))
+        nodes.append(tree_rnn.Node(val,label))
     for i in range(len(list)):
         parent = int(att_list[i][6]) - 1
         if parent >= 0:
