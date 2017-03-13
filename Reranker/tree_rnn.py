@@ -217,28 +217,26 @@ class TreeRNN(object):
         emb_x = self.embeddings[self.x]
         emb_x = emb_x * T.neq(self.x, -1).dimshuffle(0, 'x')  # zero-out non-existent embeddings
 
-        self.tree_states = self.compute_tree(emb_x, self.tree,self.labels)
+        self.tree_states,self.pred_score = self.compute_tree(emb_x, self.tree,self.labels)
         #self.final_state = self.tree_states[-1]
-        self.output_fn = self.create_output_fn()
-        self.pred_y = self.output_fn(self.tree_states,self.tree,self.labels)
+        #self.output_fn = self.create_output_fn()
+        #self.pred_y = self.output_fn(self.tree_states,self.tree,self.labels)
 
-        self.x_gold = T.ivector(name='x_gold')  # word indices
         self.tree_gold = T.imatrix(name='tree_gold')  # shape [None, self.degree]
         self.labels_gold = T.ivector(name='labels_gold')
-        emb_x_gold = self.embeddings[self.x_gold]
-        emb_x_gold = emb_x_gold * T.neq(self.x_gold, -1).dimshuffle(0, 'x')  # zero-out non-existent embeddings
-        self.tree_states_gold = self.compute_tree(emb_x_gold, self.tree_gold[:, :-1],self.labels_gold)
+
+        self.tree_states_gold,self.gold_score = self.compute_tree(emb_x, self.tree_gold,self.labels_gold)
         #self.final_state_gold = self.tree_states_gold[-1]
-        self.gold_y = self.output_fn(self.tree_states_gold,self.tree_gold,self.labels_gold)
-        self.loss_margin = self.loss_fn(self.gold_y, self.pred_y)
+        #self.gold_y = self.output_fn(self.tree_states_gold,self.tree_gold,self.labels_gold)
+        self.loss_margin = self.loss_fn(self.gold_score, self.pred_score)
         updates_margin = self.adagrad(self.loss_margin)
-        train_inputs_margin  = [self.x, self.tree ,self.x_gold,self.tree_gold,self.labels,self.labels_gold]
+        train_inputs_margin  = [self.x, self.tree ,self.tree_gold,self.labels,self.labels_gold]
         self._train_margin = theano.function(train_inputs_margin,
                                       [self.loss_margin],
                                       updates=updates_margin)
 
         self._predict = theano.function([self.x, self.tree,self.labels],
-                                        self.pred_y)
+                                        self.pred_score)
 
 
     def _check_input(self, x, tree):
@@ -265,7 +263,7 @@ class TreeRNN(object):
         x_gold, tree_gold,labels_gold, _ = gen_nn_inputs(gold_root, max_degree=self.degree)
         self._check_input(x, tree)
         self._check_input(x_gold, tree_gold)
-        return self._train_margin(x, tree, x_gold,tree_gold,labels,labels_gold)
+        return self._train_margin(x, tree,tree_gold,labels,labels_gold)
 
 
 

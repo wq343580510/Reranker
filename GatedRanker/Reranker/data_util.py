@@ -1,7 +1,7 @@
 import pickle
 import math
 from eval import eval as eval_tool
-
+import Vocab
 
 class instance(object):
     def __init__(self,kbest,scores,gold,lines,gold_lines):
@@ -10,6 +10,13 @@ class instance(object):
         self.gold = gold
         self.gold_lines = gold_lines
         self.lines = lines
+        self.f1score = []
+        self.maxid = self.get_oracle_index()
+
+    def set_f1(self):
+        for l in self.lines:
+            f1 = eval_tool.evaluate(l, self.gold_lines)[0]
+            self.f1score.append(f1)
 
     def get_oracle_index(self):
         max = 0
@@ -21,6 +28,7 @@ class instance(object):
                 temp.append(line)
             temp.append('\n')
             res = eval_tool.evaluate(temp, self.gold_lines)[0]
+            self.f1score.append(res)
             if res > max:
                 max = res
                 maxid = i
@@ -39,9 +47,10 @@ def normalize(list):
 
 
 
-def save_model(params,output_file):
+def save_model(model,output_file):
     output = open(output_file, 'wb')
-    pickle.dump(params,output, protocol=2)
+    for shared_value in model.params:
+        pickle.dump(shared_value.get_value(),output, protocol=2)
     output.close()
 
 
@@ -57,12 +66,6 @@ def load_dict(input_file):
     dict = pickle.load(pkl_file)
     pkl_file.close()
     return degree,dict
-
-def load_model(input_file):
-    pkl_file = open(input_file, 'rb')
-    params = pickle.load(pkl_file)
-    pkl_file.close()
-    return params
 
 def load_model(input_file):
     pkl_file = open(input_file, 'rb')

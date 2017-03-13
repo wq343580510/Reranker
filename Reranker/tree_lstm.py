@@ -76,12 +76,18 @@ class ChildSumTreeLSTM(tree_rnn.TreeRNN):
         else:
             init_node_h = leaf_h
             init_node_c = leaf_c
-        def composition(child_h,child_id,parent_emb,parent_id,labels):
+        def composition(child_h,child_id,parent_emb,parent_id, labels):
             parent_tag = labels[parent_id]
             child_tag =  labels[child_id]
             res = T.switch(T.lt(-1,child_id), T.tanh(T.dot(T.concatenate([parent_emb,child_h]),self.compMatrix[parent_tag][child_tag])),
                            T.zeros(self.hidden_dim))
             return res
+        def score_pair(child_h,child_id,parent_h,parent_id, labels):
+            parent_tag = labels[parent_id]
+            child_tag =  labels[child_id]
+            score = T.switch(T.lt(-1,child_id), T.tanh(T.dot(T.concatenate([parent_h,child_h]),self.scoreVector[parent_tag][child_tag])),
+                           T.zeros(self.hidden_dim))
+            return score
         # use recurrence to compute internal node hidden states
         # !!!note that the node_info don't contain the parent_id
         # a example if node_h = [leaf0,leaf1,leaf2,leaf3,leaf4,leaf0_c,leaf1_c,leaf2_c,leaf3_c,leaf4_c]
@@ -110,17 +116,24 @@ class ChildSumTreeLSTM(tree_rnn.TreeRNN):
                  non_sequences=[cur_emb,parent_id,labels]
              )
             parent_h, parent_c = self.recursive_unit(cur_emb, z_h, child_c, child_exists)
+            scores, _ = theano.scan(
+                fn=score_pair,
+                outputs_info=None,
+                sequences=[child_h, node_info],
+                non_sequences=[parent_h, parent_id, labels]
+            )
+            score = T.sum(scores)
             node_h = T.concatenate([node_h,
                                     parent_h.reshape([1, self.hidden_dim])])
             node_c = T.concatenate([node_c,
                                     parent_c.reshape([1, self.hidden_dim])])
-            return node_h[1:], node_c[1:], parent_h
+            return node_h[1:], node_c[1:], parent_h,score
 
         dummy = theano.shared(self.init_vector([self.hidden_dim]))
-        (_, _, parent_h), _ = theano.scan(
+        (_, _, parent_h,score), _ = theano.scan(
             fn=_recurrence,
-            outputs_info=[init_node_h, init_node_c, dummy],
+            outputs_info=[init_node_h, init_node_c, dummy,None],
             sequences=[emb_x[num_leaves:], tree[:,:-1],tree[:,-1], T.arange(num_nodes)],
             non_sequences = [labels],
             n_steps=num_nodes)
-        return T.concatenate([leaf_h, parent_h], axis=0)
+        return T.concatenate([leaf_h, parent_h], axis=0) , T.sum(score)

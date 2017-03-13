@@ -41,6 +41,14 @@ class DependencyModel(tree_lstm.ChildSumTreeLSTM):
         self.params['U_u'].set_value(params['U_u'].get_value())
         self.params['b_u'].set_value(params['b_u'].get_value())
 
+    # def create_output_fn(self):
+    #     def fn(tree_states, tree,labels):
+    #         score = T.switch(T.lt(-1, one_child),
+    #                      T.dot(self.scoreVector[parent_tag][child_tag],
+    #                            T.concatenate([tree_states[parent], tree_states[one_child]])),
+    #                      T.zeros(1))
+    #
+    #     return score
     def create_output_fn(self):
         # self.W_out = theano.shared(self.init_matrix([2*self.hidden_dim]))
         # self.b_out = theano.shared(self.init_vector([1]))
@@ -117,7 +125,7 @@ class DependencyModel(tree_lstm.ChildSumTreeLSTM):
             return 0
         oracle_score = self.predict(oracle_root)
         loss = oracle_score-pred_score
-        if loss < 0:
+        if loss > 0:
             self.train_margin(oracle_root,pred_root)
         return loss
 
