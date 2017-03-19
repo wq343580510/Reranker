@@ -9,7 +9,7 @@ import data_reader
 LEARNING_RATE = 0.1
 EMB_DIM = 50
 HIDDEN_DIM = 200
-OUTPUT_DIM = 10
+OUTPUT_DIM = 1
 
 
 class DependencyModel(tree_rnn.TreeRNN):
@@ -47,9 +47,10 @@ class DependencyModel(tree_rnn.TreeRNN):
         self.b_u.set_value(pickle.load(pkl_file))
         self.W_out.set_value(pickle.load(pkl_file))
         self.b_out.set_value(pickle.load(pkl_file))
-        self.W_gate.set_value(pickle.load(pkl_file))
-        self.U_gate.set_value(pickle.load(pkl_file))
-        self.b_gate.set_value(pickle.load(pkl_file))
+        if self.Pairwise:
+            self.W_gate.set_value(pickle.load(pkl_file))
+            self.U_gate.set_value(pickle.load(pkl_file))
+            self.b_gate.set_value(pickle.load(pkl_file))
         pkl_file.close()
 
     def set_emb(self,emb):
@@ -92,10 +93,10 @@ class DependencyModel(tree_rnn.TreeRNN):
         return loss
 
 
-def get_model(num_emb, max_degree):
+def get_model(num_emb, tag_size, max_degree,p):
     return DependencyModel(
-        num_emb, EMB_DIM, HIDDEN_DIM, OUTPUT_DIM,
+        num_emb,tag_size, EMB_DIM, HIDDEN_DIM, OUTPUT_DIM,
         degree=max_degree, learning_rate=LEARNING_RATE,
-        trainable_embeddings=True,
+        trainable_embeddings=True,pairwise = p
         )
 

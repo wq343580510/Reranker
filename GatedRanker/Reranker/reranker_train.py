@@ -15,7 +15,7 @@ OUTPUT_MODEL = 'model.pkl'
 OUTPUT_BEST = 'model_best.pkl'
 OUTPUT_DICT = 'dict.pkl'
 TRAIN_BATCH_SIZE = 3
-PAIR_WISE = True
+PAIR_WISE = False
 NUM_EPOCHS = 20
 
 
@@ -24,13 +24,14 @@ def train_dataset(model, data, echo,batch,pairwise):
     avg_loss = 0.0
     total_data = len(data)
     loss = 0.0
+    print 'echo %s batch %d' % (echo, batch)
     for i, inst in enumerate(data):
         if pairwise:
             loss = model.train_step_pairwise(inst)
         else:
             loss = model.train_step_pointwise(inst.kbest, inst.gold)
         losses.append(loss)
-        print 'echo %s batch %d size %d instance: %d  loss: %.10f' %(echo, batch ,len(data),i,loss)
+        #print 'echo %s batch %d size %d instance: %d  loss: %.10f' %(echo, batch ,len(data),i,loss)
         #avg_loss = avg_loss * (len(losses) - 1) / len(losses) + loss / len(losses)
         #print 'echo %d batch %d avg loss %.4f example id %d batch size %d\r' % (echo ,batch,avg_loss, inst.id, total_data)
     loss = np.mean(losses)
@@ -46,7 +47,7 @@ def train_model():
 
     dev_data = data_tool.dev_data
     print 'build model'
-    model = dependency_model.get_model(data_tool.vocab.size(), data_tool.max_degree)
+    model = dependency_model.get_model(data_tool.vocab.size(),data_tool.vocab.tagsize(), data_tool.max_degree,PAIR_WISE)
     print 'model established'
     max_uas = 0
     if PAIR_WISE:

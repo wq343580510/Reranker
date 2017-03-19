@@ -2,17 +2,18 @@ import numpy as np
 import theano
 from theano import tensor as T,printing
 from theano.compat.python2x import OrderedDict
+from theano.ifelse import ifelse
 theano.config.floatX = 'float32'
+PAIR_WISE = True
 L2_RATIO = 0.00000001
 
 class Node(object):
-    def __init__(self, val=None,id_s = 0,tag = 0):
+    def __init__(self, val=None,id_s = 0):
         self.children = []
         self.val = val
         self.idx = None
         self.height = 1
         self.size = 1
-        self.tag_idx = tag
         self.num_leaves = 1
         self.id_s = id_s
         self.parent = None
@@ -80,15 +81,14 @@ def gen_nn_inputs(root_node, max_degree=None, only_leaves_have_vals=False,
 
     """
     _clear_indices(root_node)
-    x, leaf_labels,id_x,tags = _get_leaf_vals(root_node)
-    tree, internal_x, internal_labels ,id_internal_x,tags_internal = \
+    x, leaf_labels,id_x = _get_leaf_vals(root_node)
+    tree, internal_x, internal_labels ,id_internal_x = \
         _get_tree_traversal(root_node, len(x), max_degree)
     assert all(v is not None for v in x)
     if not only_leaves_have_vals:
         assert all(v is not None for v in internal_x)
         x.extend(internal_x)
         id_x.extend(id_internal_x)
-        tags.extend(tags_internal)
     if max_degree is not None:
         assert all(len(t) == max_degree + 1 for t in tree)
     if with_labels:
@@ -101,9 +101,7 @@ def gen_nn_inputs(root_node, max_degree=None, only_leaves_have_vals=False,
                 np.array(labels_exist, dtype=theano.config.floatX))
     return (np.array(x, dtype='int32'),
             np.array(tree, dtype='int32'),
-            id_x,
-            np.array(tags, dtype='int32')
-            )
+            id_x)
 
 
 def _clear_indices(root_node):
@@ -127,14 +125,12 @@ def _get_leaf_vals(root_node):
     vals = []
     labels = []
     id_x = []
-    tags = []
     for idx, leaf in enumerate(reversed(all_leaves)):
         leaf.idx = idx
         vals.append(leaf.val)
         id_x.append(leaf.id_s)
         labels.append(leaf.label)
-        tags.append(leaf.tag_idx)
-    return vals, labels,id_x,tags
+    return vals, labels,id_x
 
 
 def _get_tree_traversal(root_node, start_idx=0, max_degree=None):
@@ -153,7 +149,6 @@ def _get_tree_traversal(root_node, start_idx=0, max_degree=None):
     tree = []
     internal_vals = []
     id_internal_x = []
-    tag_internal_x = []
     labels = []
     idx = start_idx
     for layer in reversed(layers):
@@ -173,11 +168,10 @@ def _get_tree_traversal(root_node, start_idx=0, max_degree=None):
             tree.append(child_idxs + [node.idx])
             internal_vals.append(node.val if node.val is not None else -1)
             id_internal_x.append(node.id_s if node.val is not None else -1)
-            tag_internal_x.append(node.tag_idx)
             labels.append(node.label)
             idx += 1
 
-    return tree, internal_vals, labels,id_internal_x,tag_internal_x
+    return tree, internal_vals, labels,id_internal_x
 
 
 class TreeRNN(object):
@@ -192,33 +186,29 @@ class TreeRNN(object):
     state computed at the root.
 
     """
-    def __init__(self, num_emb,tag_size, emb_dim, hidden_dim, output_dim,
+    def __init__(self, num_emb, emb_dim, hidden_dim, output_dim,
                  degree=2, learning_rate=0.01, momentum=0.9,
                  trainable_embeddings=True,
                  labels_on_nonroot_nodes=False,
-                 irregular_tree=False,pairwise = True):
+                 irregular_tree=False):
         assert emb_dim > 1 and hidden_dim > 1
         self.num_emb = num_emb
-        self.tag_size = tag_size
         self.emb_dim = emb_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         self.degree = degree
         self.learning_rate = learning_rate
         self.L2_ratio = L2_RATIO
-        self.Pairwise = pairwise
+        self.Pairwise = PAIR_WISE
         self.params = []
         #self.embeddings = theano.shared(self.init_matrix([self.num_emb, self.emb_dim]))
         self.embeddings = theano.shared(self.init_matrix([self.num_emb, self.emb_dim]))
         self.params.append(self.embeddings)
         self.recursive_unit = self.create_recursive_unit()
         self.leaf_unit = self.create_leaf_unit()
-        #self.output_fn = self.create_output_fn()
-        self.score_fn = self.create_score_fn()
+        self.output_fn = self.create_output_fn()
         self.x1 = T.ivector(name='x1')  # word indices
         self.x2 = T.ivector(name='x2')  # word indices
-        self.tag_1 = T.ivector(name='tag1')  # word indices
-        self.tag_2 = T.ivector(name='tag2')  # word indices
         self.x1_2 = T.ivector(name='x1_2')  # word indices
         self.x2_1 = T.ivector(name='x2_1')  # word indices
         self.num_words = self.x1.shape[0]
@@ -232,8 +222,8 @@ class TreeRNN(object):
         self.tree_3 = T.imatrix(name='tree3')  # shape [None, self.degree]
         # do not consider the unk
         self.tree_4 = T.imatrix(name='tree4')  # shape [None, self.degree]
-        self.tree_states_1,self.tree_c_1 = self.compute_tree(self.emb_x1, self.tree_1)
-        self.tree_states_2,self.tree_c_2 = self.compute_tree(self.emb_x2, self.tree_2)
+        self.tree_states_1 = self.compute_tree(self.emb_x1, self.tree_1)
+        self.tree_states_2 = self.compute_tree(self.emb_x2, self.tree_2)
         self._compute_emb = theano.function([self.x1,self.tree_1],self.tree_states_1)
         if self.Pairwise:
             self.forget_unit = self.create_forget_gate_fun()
@@ -243,68 +233,84 @@ class TreeRNN(object):
 
 
     def create_pairwise_rank(self):
-        gate_states_better = self.compute_tree_with_gate(self.x1_2, self.emb_x1, self.tree_3,
-                                                         self.tree_states_2,self.tree_c_2)
-        gate_states_worse = self.compute_tree_with_gate(self.x2_1,self.emb_x2, self.tree_4,
-                                                        self.tree_states_1,self.tree_c_2)
+        gate_states_better = self.compute_tree_with_gate(self.x1_2, self.emb_x1, self.tree_1, self.tree_states_2)
+        gate_states_worse = self.compute_tree_with_gate(self.x2_1,self.emb_x2, self.tree_2,self.tree_states_1)
 
-        # better_y = self.output_fn(gate_states_better[-1])
-        # worse_y = self.output_fn(gate_states_worse[-1])
-        leaveNum1 = self.x1.shape[0] - self.tree_1.shape[0]
-        leaveNum2 = self.x2.shape[0] - self.tree_2.shape[0]
-        better_y = self.score_fn(gate_states_better[leaveNum1:],self.tag_1[leaveNum1:])
-        worse_y = self.score_fn(gate_states_worse[leaveNum2:],self.tag_2[leaveNum2:])
+        better_y = self.output_fn(gate_states_better[-1])
+        worse_y = self.output_fn(gate_states_worse[-1])
         pred = self.loss_fn(worse_y,better_y)
         loss = self.loss_fn_regular(worse_y,better_y)
-        train_inputs_margin = [self.x1, self.x2, self.tree_1, self.tree_2,
-                               self.tree_3,
-                               self.tree_4,
-                               self.x1_2, self.x2_1,self.tag_1,self.tag_2]
+        train_inputs_margin = [self.x1, self.x2, self.tree_1, self.tree_2,self.x1_2, self.x2_1,self.tree_states_1,self.tree_states_2]
         predict = theano.function(train_inputs_margin, [pred])
         train_margin = theano.function(train_inputs_margin,[loss],updates=self.adagrad_pair(loss))
         return train_margin,predict
 
     def create_pointwise_rank(self):
-        train_inputs = [self.x1, self.x2, self.tree_1, self.tree_2,self.tag_1,self.tag_2]
-        leaveNum1 = self.x1.shape[0] - self.tree_1.shape[0]
-        leaveNum2 = self.x2.shape[0] - self.tree_2.shape[0]
-        tree_y1 = self.score_fn(self.tree_states_1[leaveNum1:],self.tag_1[leaveNum1:])
-        tree_y2 = self.score_fn(self.tree_states_2[leaveNum2:],self.tag_2[leaveNum2:]) #gold
+        train_inputs = [self.x1, self.x2, self.tree_1, self.tree_2]
+        tree_y1 = self.output_fn(self.tree_states_1[-1])
+        tree_y2 = self.output_fn(self.tree_states_2[-1]) #gold
         loss = self.loss_fn_regular(tree_y1,tree_y2)
-        predict = theano.function([self.x1, self.tree_1,self.tag_1],T.sum(tree_y1))
+        predict = theano.function([self.x1, self.tree_1],T.sum(tree_y1))
         train_func = theano.function(train_inputs,loss,updates=self.adagrad(loss))
         return predict,train_func
 
     def predict(self, root_node):
-        x, tree ,_,tags = gen_nn_inputs(root_node, max_degree=self.degree, with_labels= False)
+        x, tree ,_ = gen_nn_inputs(root_node, max_degree=self.degree, with_labels= False)
         # x list the val of leaves and internal nodes
         self._check_input(x, tree)
-        return self._predict(x, tree[:, :-1],tags)
+        return self._predict(x, tree[:, :-1])
 
     def train_pointwise(self, root1, root2):
-        x, tree, _,tag1 = gen_nn_inputs(root1, max_degree=self.degree, only_leaves_have_vals=False)
-        x_2, tree_2, _,tag2 = gen_nn_inputs(root2, max_degree=self.degree, only_leaves_have_vals=False)
+        x, tree, _ = gen_nn_inputs(root1, max_degree=self.degree, only_leaves_have_vals=False)
+        x_2, tree_2, _ = gen_nn_inputs(root2, max_degree=self.degree, only_leaves_have_vals=False)
         self._check_input(x, tree)
         self._check_input(x_2, tree_2)
-        loss = self._train_pointwise(x, x_2, tree[:, :-1], tree_2[:, :-1],tag1,tag2)
+        loss = self._train_pointwise(x, x_2, tree[:, :-1], tree_2[:, :-1])
         return loss
 
     def _check_input(self, x, tree):
         assert np.array_equal(tree[:, -1], np.arange(len(x) - len(tree), len(x)))
 
+    def train_pairwise_kbest(self, kbest, f1score, pred=False):
+        x = []
+        tree = []
+        id_x = []
+        k_tree_states = []
+        for root in kbest:
+            x1, tree1, id_x1 = gen_nn_inputs(root, max_degree=self.degree, only_leaves_have_vals=False)
+            k_tree_states.append(self._compute_emb(x1,tree1))
+            x.append(x1)
+            tree.append(tree1)
+            id_x.append(id_x1)
+        loss = 0
+        for i in range(len(kbest)):
+            for j in range(i,len(kbest)):
+                bet = i
+                wor = j
+                if f1score[i] < f1score[j]:
+                    bet = j
+                    wor = i
+                id_x1 = id_x[bet]
+                id_x2 = id_x[wor]
+                id1_2 = np.array([id_x2.index(c) for c in id_x1], dtype='int32')
+                id2_1 = np.array([id_x1.index(c) for c in id_x2], dtype='int32')
+                loss += self._train_pairwise(x[bet],x[wor],tree[bet],tree[wor],id1_2,id2_1,
+                                     k_tree_states[bet],k_tree_states[wor])
+        return loss
+
     def train_pairwise(self,better_root,worse_root,pred = False):
-        x, tree,id_x,tags1 = gen_nn_inputs(better_root, max_degree=self.degree, only_leaves_have_vals=False)
-        x_2, tree_2,id_x2,tags2 = gen_nn_inputs(worse_root, max_degree=self.degree, only_leaves_have_vals=False)
+        x, tree,id_x = gen_nn_inputs(better_root, max_degree=self.degree, only_leaves_have_vals=False)
+        x_2, tree_2,id_x2 = gen_nn_inputs(worse_root, max_degree=self.degree, only_leaves_have_vals=False)
         id1_2 = np.array([id_x2.index(c) for c in id_x],dtype='int32')
         id2_1 = np.array([id_x.index(c) for c in id_x2],dtype='int32')
         self._check_input(x, tree)
         self._check_input(x_2, tree_2)
         if pred:
             loss = self._predict_pair(x, x_2, tree[:, :-1], tree_2[:, :-1],
-                                        tree[:, :-1], tree_2[:, :-1], id1_2,id2_1,tags1,tags2)
+                                        tree[:, :-1], tree_2[:, :-1], id1_2,id2_1)
         else:
             loss = self._train_pairwise(x,x_2, tree[:, :-1],tree_2[:, :-1],
-                                        tree[:, :-1],tree_2[:, :-1],id1_2,id2_1,tags1,tags2)
+                                        tree[:, :-1],tree_2[:, :-1],id1_2,id2_1)
         return loss
 
     def init_matrix(self, shape):
@@ -318,17 +324,6 @@ class TreeRNN(object):
     def init_emb(self, shape):
         #return np.random.normal(scale=1, size=shape).astype(theano.config.floatX)
         return np.random.normal(scale=0.1, size=shape).astype(theano.config.floatX)
-
-    def create_score_fn(self):
-        self.scoreVector = theano.shared(self.init_matrix([self.tag_size, self.hidden_dim]))
-        self.params.append(self.scoreVector)
-        def score(state,index,vector):
-            return T.dot(vector[index],state)
-
-        def fun(states,index):
-            scores,_ = theano.scan(fn = score,sequences=[states,index],non_sequences=[self.scoreVector])
-            return T.sum(scores)
-        return fun
 
     def create_output_fn(self):
         self.W_out = theano.shared(self.init_matrix([self.output_dim, self.hidden_dim]))
@@ -410,11 +405,11 @@ class TreeRNN(object):
                 T.dot(self.W_gate, parent_h) +
                 T.dot(self.U_gate, compare_h) +
                 self.b_gate)
-            return (1-f)*parent_h + f * compare_h
+            return parent_h + f * compare_h
 
         return unit
 
-    def compute_tree_with_gate(self, x, emb_x, tree, tree_states,tree_cs):
+    def compute_tree_with_gate(self, x, emb_x, tree, tree_states):
         num_nodes = tree.shape[0]  # num internal nodes
         num_leaves = self.num_words - num_nodes
 
@@ -430,29 +425,28 @@ class TreeRNN(object):
         init_node_c = T.concatenate([leaf_c, leaf_c], axis=0)
 
         # use recurrence to compute internal node hidden states
-        def _recurrence(cur_emb, node_info, t, x_index, node_h, node_c, last_h, tree_states,tree_cs):
+        def _recurrence(cur_emb, node_info, t, x_index, node_h, node_c, last_h, tree_states):
             child_exists = node_info > -1
             offset = num_leaves - child_exists * t
             child_h = node_h[node_info + offset] * child_exists.dimshuffle(0, 'x')
             child_c = node_c[node_info + offset] * child_exists.dimshuffle(0, 'x')
             parent_h, parent_c = self.recursive_unit(cur_emb, child_h, child_c, child_exists)
             parent_gate_h = self.forget_unit(parent_h, tree_states[x_index])
-            parent_gate_c = self.forget_unit(parent_h, tree_cs[x_index])
             node_h = T.concatenate([node_h,
                                     parent_gate_h.reshape([1, self.hidden_dim])])
             node_c = T.concatenate([node_c,
-                                    parent_gate_c.reshape([1, self.hidden_dim])])
+                                    parent_c.reshape([1, self.hidden_dim])])
             return node_h[1:], node_c[1:], parent_gate_h
 
         dummy = theano.shared(self.init_vector([self.hidden_dim]))
-        (_, _, parent_h), _ = theano.scan(
+        (_, _, parent1_h), _ = theano.scan(
             fn=_recurrence,
             outputs_info=[init_node_h, init_node_c, dummy],
             sequences=[emb_x[num_leaves:], tree, T.arange(num_nodes), x[num_leaves:]],
-            non_sequences=[tree_states,tree_cs],
+            non_sequences=[tree_states],
             n_steps=num_nodes)
 
-        return T.concatenate([leaf_h, parent_h], axis=0)
+        return T.concatenate([leaf_h, parent1_h], axis=0)
 
     def compute_tree(self, emb_x, tree):
         num_nodes = tree.shape[0]  # num internal nodes
@@ -466,7 +460,7 @@ class TreeRNN(object):
         init_node_c = T.concatenate([leaf_c, leaf_c], axis=0)
 
         # use recurrence to compute internal node hidden states
-        def _recurrence(cur_emb, node_info, t, node_h, node_c, last_h,last_c):
+        def _recurrence(cur_emb, node_info, t, node_h, node_c, last_h):
             child_exists = node_info > -1
             offset = num_leaves - child_exists * t
             child_h = node_h[node_info + offset] * child_exists.dimshuffle(0, 'x')
@@ -476,44 +470,45 @@ class TreeRNN(object):
                                     parent_h.reshape([1, self.hidden_dim])])
             node_c = T.concatenate([node_c,
                                     parent_c.reshape([1, self.hidden_dim])])
-            return node_h[1:], node_c[1:], parent_h,parent_c
+            return node_h[1:], node_c[1:], parent_h
 
         dummy = theano.shared(self.init_vector([self.hidden_dim]))
-        (_, _, parent_h,parent_c), _ = theano.scan(
+        (_, _, parent_h), _ = theano.scan(
             fn=_recurrence,
-            outputs_info=[init_node_h, init_node_c, dummy,dummy],
+            outputs_info=[init_node_h, init_node_c, dummy],
             sequences=[emb_x[num_leaves:], tree, T.arange(num_nodes)],
             n_steps=num_nodes)
 
-        return T.concatenate([leaf_h, parent_h], axis=0),T.concatenate([leaf_c, parent_c], axis=0)
+        return T.concatenate([leaf_h, parent_h], axis=0)
 
 
     def loss_fn_regular(self, y1, y2):
         loss = T.sum(y1-y2)
         L2 = T.sum(self.W_i ** 2)+T.sum(self.W_o ** 2)+T.sum(self.W_u ** 2)+T.sum(self.W_f ** 2)+\
-             T.sum(self.U_i ** 2)+T.sum(self.U_o ** 2)+\
-             T.sum(self.U_u ** 2)+T.sum(self.U_f ** 2)+T.sum(self.scoreVector**2)
+             T.sum(self.W_out ** 2)+T.sum(self.U_i ** 2)+T.sum(self.U_o ** 2)+\
+             T.sum(self.U_u ** 2)+T.sum(self.U_f ** 2)
         if self.Pairwise:
             L2 += T.sum(self.W_gate ** 2)
             L2 += T.sum(self.U_gate ** 2)
-        #T.sum(self.W_out ** 2)
         return loss + L2 * self.L2_ratio
 
     def loss_fn(self, y1, y2):
         return T.sum(y1-y2)
 
     def adagrad(self, loss, epsilon=1e-6):
-        grads = T.grad(loss, self.params)
+        grads = T.grad(loss, wrt=list(self.params.values()))
+        # grads = T.grad(loss, self.params)
         updates = OrderedDict()
 
-        for param, grad in zip(self.params, grads):
+        for param, grad in zip(self.params.values(), grads):
             value = param.get_value(borrow=True)
             accu = theano.shared(np.zeros(value.shape, dtype=value.dtype),
                                  broadcastable=param.broadcastable)
-            accu_new =  accu + grad ** 2
+            accu_new = accu + grad ** 2
             updates[accu] = accu_new
             updates[param] = param - (self.learning_rate * grad /
                                       T.sqrt(accu_new + epsilon))
+
         return updates
 
 

@@ -11,7 +11,7 @@ class instance(object):
         self.gold_lines = gold_lines
         self.lines = lines
         self.f1score = []
-        self.maxid = self.get_oracle_index()
+        #self.maxid = self.get_oracle_index()
 
     def set_f1(self):
         for l in self.lines:

@@ -1,32 +1,34 @@
 import os
 import dev_reader
 import data_util
-from Reranker.eval import eval as eval_tool
+from eval import eval as eval_tool
 import numpy as np
 import dependency_model
 
-DIR = 'd:\\MacShare\\data2\\'
+DIR = 'd:\\MacShare\\data\\'
 TRAIN = 'train'
 DEV = 'dev'
 TEST = 'test'
-OUTPUT_MODEL = 'model_8.pkl'
-OUTPUT_DICT = 'dict_8.pkl'
+OUTPUT_MODEL = 'model.pkl'
+OUTPUT_DICT = 'dict.pkl'
 
 
 def test_model():
     max_degree,vocab = data_util.load_dict(os.path.join(DIR, OUTPUT_DICT))
-    dev_data = Reranker.dev_reader.read_dev(os.path.join(DIR, DEV + '.kbest'),
+    dev_data = dev_reader.read_dev(os.path.join(DIR, DEV + '.kbest'),
                                             os.path.join(DIR, DEV + '.gold'), vocab)
     # test_data = dev_reader.read_dev(os.path.join(DIR, TEST + '.kbest'),
     #                                     os.path.join(DIR, TEST + '.gold'), vocab)
     #evaluate_oracle_worst(test_data)
     evaluate_oracle_worst(dev_data)
     print 'build model'
-    model = Reranker.dependency_model.get_model(vocab.size(), max_degree)
+    model = dependency_model.get_model(vocab.size(), max_degree)
     print 'load params'
     model.set_parmas(os.path.join(DIR,OUTPUT_MODEL))
-    print 'addbase'
-    evaluate_dataset(model,dev_data,True)
+    if model.Pairwise:
+        evaluate_dataset_pair(model,dev_data)
+    else:
+        evaluate_dataset_point(model, dev_data)
     #evaluate_dataset(model, test_data, True)
 
 
@@ -89,7 +91,12 @@ def evaluate_dataset_point(model, data , addbase):
     pred_trees = []
     gold_trees = []
     for i, inst in enumerate(data):
-        pred_scores = [model.predict(tree) for tree in inst.kbest if tree.size == inst.gold.size]
+        pred_scores = []
+        for tree in inst.kbest:
+            if tree.size == inst.gold.size:
+                pred_scores.append(model.predict(tree))
+            else:
+                pred_scores.append(-1000)
         data_util.normalize(pred_scores)
         if addbase:
             data_util.normalize(inst.scores)
